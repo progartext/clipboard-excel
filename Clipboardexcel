@@ -1,0 +1,77 @@
+Option Explicit
+
+Dim frmSidebar As Object
+
+Private Sub Workbook_Open()
+    Application.ScreenUpdating = False
+    ' Create the form
+    Set frmSidebar = ThisWorkbook.VBProject.VBComponents.Add(vbext_ct_MSForm)
+    With frmSidebar
+        .Name = "frmSidebar"
+        .Caption = "Sidebar"
+        .Width = 200
+        .StartUpPosition = 0 ' manual
+        .Left = Application.Left + Application.Width - .Width - 50
+        .Top = Application.Top + 100
+        .ShowModal = False
+        .Show
+    End With
+    ' Add a listbox to the form
+    With frmSidebar.Controls.Add("Forms.ListBox.1", "lstObjects")
+        .Width = frmSidebar.Width - 10
+        .Height = frmSidebar.Height - 50
+        .Top = 20
+        .Left = 5
+    End With
+    Application.OnKey "^+c", "CopyToClipboard"
+    Application.ScreenUpdating = True
+End Sub
+
+Sub CopyToClipboard()
+    Dim obj As Object
+    Dim strObjType As String
+    Dim strObjText As String
+    Dim i As Integer
+    
+    ' Get the contents of the clipboard
+    On Error Resume Next
+    Set obj = GetClipboardObject()
+    strObjType = TypeName(obj)
+    strObjText = obj.Text
+    On Error GoTo 0
+    
+    ' Add the object or text to the list
+    If strObjType <> "Empty" Then
+        With frmSidebar.lstObjects
+            .AddItem strObjType & " - " & strObjText
+            .List(.ListCount - 1, 1) = obj
+        End With
+    End If
+End Sub
+
+Private Function GetClipboardObject() As Object
+    Dim obj As Object
+    On Error Resume Next
+    Set obj = GetObject("Clipboard")
+    Set GetClipboardObject = obj
+End Function
+
+Private Sub lstObjects_MouseMove(ByVal Button As Integer, ByVal Shift As Integer, ByVal x As Single, ByVal y As Single)
+    ' Expand the form when the mouse moves over it
+    With frmSidebar
+        If .Width = 20 Then
+            .Width = 200
+            .lstObjects.Height = .Height - 50
+        End If
+    End With
+End Sub
+
+Private Sub lstObjects_Click()
+    ' Copy the selected object or text back to the clipboard
+    With frmSidebar.lstObjects
+        If .ListIndex >= 0 Then
+            Clipboard.Clear
+            Clipboard.SetText .List(.ListIndex, 1).Text
+        End If
+    End With
+End Sub
