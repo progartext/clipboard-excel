@@ -1,5 +1,16 @@
 Option Explicit
 
+Private Declare Function OpenClipboard Lib "user32" (ByVal hwnd As Long) As Long
+Private Declare Function CloseClipboard Lib "user32" () As Long
+Private Declare Function GetClipboardData Lib "user32" (ByVal wFormat As Long) As Long
+Private Declare Function EmptyClipboard Lib "user32" () As Long
+Private Declare Function SetClipboardData Lib "user32" (ByVal wFormat As Long, ByVal hMem As Long) As Long
+Private Declare Function GlobalAlloc Lib "kernel32" (ByVal wFlags As Long, ByVal dwBytes As Long) As Long
+Private Declare Function GlobalLock Lib "kernel32" (ByVal hMem As Long) As Long
+Private Declare Function GlobalUnlock Lib "kernel32" (ByVal hMem As Long) As Long
+Private Declare Function GlobalSize Lib "kernel32" (ByVal hMem As Long) As Long
+Private Declare Sub CopyMemory Lib "kernel32" Alias "RtlMoveMemory" (pDest As Any, pSource As Any, ByVal dwLength As Long)
+
 Dim frmSidebar As Object
 
 Private Sub Workbook_Open()
@@ -49,29 +60,60 @@ Sub CopyToClipboard()
     End If
 End Sub
 
-Private Function GetClipboardObject() As Object
+
+Function GetClipboardObject() As Object
     Dim obj As Object
-    On Error Resume Next
-    Set obj = GetObject("Clipboard")
+    Dim pData As LongPtr
+    Dim lSize As Long
+    
+    ' Open the clipboard
+    If OpenClipboard(0) Then
+        ' Get the handle to the clipboard data
+        pData = GetClipboardData(CF_UNICODETEXT)
+        
+        ' If the handle is not null, lock the handle to get a pointer to the clipboard data
+        If pData <> 0 Then
+            pData = GlobalLock(pData)
+            If pData <> 0 Then
+                ' Get the size of the clipboard data
+                lSize = GlobalSize(pData)
+                
+                If lSize > 0 Then
+                    ' Copy the clipboard data to a string
+                    Dim strData As String
+                    strData = Space(lSize \ 2)
+                    CopyMemory ByVal StrPtr(strData), ByVal pData, lSize
+                    
+                    ' Create a new data object and set its text property
+                    Set obj = CreateObject("New:{1C3B4210-F441-11CE-B9EA-00AA006B1A69}")
+                    obj.SetText strData
+                End If
+                
+                ' Unlock the handle to the clipboard data
+                GlobalUnlock pData
+            End If
+        End If
+        
+        ' Close the clipboard
+        CloseClipboard
+    End If
+    
+    ' Return the clipboard object
     Set GetClipboardObject = obj
 End Function
 
-Private Sub lstObjects_MouseMove(ByVal Button As Integer, ByVal Shift As Integer, ByVal x As Single, ByVal y As Single)
-    ' Expand the form when the mouse moves over it
-    With frmSidebar
-        If .Width = 20 Then
-            .Width = 200
-            .lstObjects.Height = .Height - 50
-        End If
-    End With
-End Sub
-
 Private Sub lstObjects_Click()
-    ' Copy the selected object or text back to the clipboard
-    With frmSidebar.lstObjects
-        If .ListIndex >= 0 Then
-            Clipboard.Clear
-            Clipboard.SetText .List(.ListIndex, 1).Text
-        End If
-    End With
+    Dim obj As Object
+    Dim strObjText As String
+    
+    ' Get the selected object or text from the list
+    Set obj = frmSidebar.lstObjects.List(frmSidebar.lstObjects.ListIndex, 1)
+    strObjText = obj.Text
+    
+    ' Clear the clipboard and set the selected object or text as the new contents
+    EmptyClipboard
+    SetClipboardData CF_UNICODETEXT, obj.GetFormat(1).GetText(1)
+    
+    ' Show a message to confirm that the object or text was copied to the clipboard
+    MsgBox "The following object or text was copied to the clipboard:" & vbCrLf & strObjText, vbInformation, "Clipboard"
 End Sub
